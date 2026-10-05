@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "محلّل العروض والملاحظات"
+description = "تطبيق عربي لتحليل عروض PowerPoint واستخراج أقسامها ومشكلاتها وملاحظاتها، مع رسوم بيانية وإضافة ملاحظات وصور وتصدير تقرير للمشاركة."
+version = "1.0.0"
+id = "artifacts/pptx-analyzer"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 26060
+
+[services.development]
+run = "pnpm --filter @workspace/pptx-analyzer run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pptx-analyzer", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/pptx-analyzer/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26060"
+BASE_PATH = "/"

@@ -1,0 +1,1 @@
+- [Browser-local document scope](browser-local-document-scope.md) — keep presentations, analysis, notes, and images on-device; disclose that slide-image text is not extracted.
