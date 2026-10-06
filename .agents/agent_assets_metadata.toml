@@ -14,3 +14,17 @@ mtime_ms = 1791263232488
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:5bfc7e3e-867e-4148-98ca-7b62cb574a49/81ff5002-87bd-4e01-9f56-5d43656ee376/fe4c0b18-798d-410e-b67c-d6c39c450117"
 storage_version_token = "1791263247665952"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "GoHJ236rswMGbhqQXE3i6"
+uri = "file://exports/waraq-project-github.zip"
+type = "unspecified"
+title = "مشروع وَرَق — نسخة مصدر مناسبة لـ GitHub"
+description = "أرشيف المصدر الكامل بعد استبعاد ملفات البناء dist فقط: 204 ملفًا بدل 239. يتضمن ملفات التطبيق والإعدادات والأصول، ويمكن إعادة إنشاء ملفات البناء بعد تثبيت الاعتمادات."
+logical_id = "d104df1a-39c4-414b-8252-5944e27fc355"
+content_hash = "sha256:7f65157e69e1592a9db06c5f0a4e96ca9df90bb361c28079ac56586da933721c"
+size = 286320
+mtime_ms = 1791263763312
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:5bfc7e3e-867e-4148-98ca-7b62cb574a49/d104df1a-39c4-414b-8252-5944e27fc355/6e36d8c8-7518-4576-bcbd-c0aebade4e84"
+storage_version_token = "1791263781697123"
+content_type = "application/octet-stream"
