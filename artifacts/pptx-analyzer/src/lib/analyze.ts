@@ -3,6 +3,7 @@ import type {
   Finding,
   FindingKind,
   FindingSeverity,
+  PresentationAsset,
   PresentationAnalysis,
 } from "./types";
 
@@ -91,11 +92,13 @@ function sentenceFindings(slide: ExtractedSlide, startIndex: number): Finding[] 
 export function analyzeSlides(
   fileName: string,
   slides: ExtractedSlide[],
+  imageAssets: Record<string, PresentationAsset> = {},
 ): PresentationAnalysis {
   const records = slides.map((slide) => ({
     number: slide.number,
     title: slide.title || `الشريحة ${slide.number}`,
     text: slide.text,
+    imageIds: slide.imageIds ?? [],
   }));
   const findings = slides.flatMap((slide) => {
     const labeled = labeledFindings(slide);
@@ -113,6 +116,7 @@ export function analyzeSlides(
     createdAt: new Date().toISOString(),
     slideCount: slides.length,
     slides: records,
+    imageAssets,
     findings,
     notes: [],
   };

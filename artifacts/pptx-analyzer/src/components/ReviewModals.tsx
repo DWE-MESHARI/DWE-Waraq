@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import type { Finding, PresentationAnalysis, SlideRecord, UserNote } from '../lib/pptx';
 import { severityTone, type NoteDraft } from '../lib/view';
+import { SlideImageGallery } from './SlideImageGallery';
 
 type ReviewModalsProps = {
   active: PresentationAnalysis | null;
@@ -49,6 +50,9 @@ export function ReviewModals({
   confirmRemoveStudy,
   beginNote,
 }: ReviewModalsProps) {
+  const imageSlideNumber = selectedFinding?.slideNumber || selectedSlide?.number;
+  const imageSlide = active?.slides.find(slide => slide.number === imageSlideNumber);
+
   return (
     <>
       {(selectedFinding || selectedSlide) && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) { setSelectedFinding(null); setSelectedSlide(null); } }}>
@@ -57,6 +61,7 @@ export function ReviewModals({
           <div className="quote-source"><span className="slide-number">{String((selectedFinding?.slideNumber || selectedSlide?.number) || 0).padStart(2, '0')}</span><div><strong>{active?.slides.find(slide => slide.number === (selectedFinding?.slideNumber || selectedSlide?.number))?.title}</strong><small>{active?.fileName}</small></div></div>
           {selectedFinding && <div className="finding-detail"><span className={`severity-tag ${severityTone[selectedFinding.severity]}`}>{selectedFinding.severity}</span><p>{selectedFinding.text}</p></div>}
           <blockquote className="quote-full">{selectedFinding?.evidence || selectedSlide?.text || 'لا يوجد نص مستخرج من هذه الشريحة.'}</blockquote>
+          {imageSlide && <SlideImageGallery slide={imageSlide} assets={active?.imageAssets} />}
           <div className="full-slide-text">{selectedSlide && selectedSlide.text !== selectedSlide.title && selectedSlide.text.split('\n').slice(1).join('\n')}</div>
           <div className="modal-actions"><button className="secondary-button" onClick={() => beginNote(selectedFinding?.slideNumber || selectedSlide?.number, selectedFinding?.evidence || selectedSlide?.text)} data-testid="button-note-from-quote"><Plus size={16} />أضف ملاحظة مرتبطة</button><button className="text-button" onClick={() => { setSelectedFinding(null); setSelectedSlide(null); }}>إغلاق</button></div>
         </section>

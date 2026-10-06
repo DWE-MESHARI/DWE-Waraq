@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { Finding, PresentationAnalysis, UserNote } from '../lib/pptx';
 import { formatDate, severityTone } from '../lib/view';
+import { SlideImageGallery } from './SlideImageGallery';
 
 type ReviewWorkspaceProps = {
   active: PresentationAnalysis;
@@ -93,9 +94,12 @@ export function ReviewWorkspace({
             </article>)}
           </div> : <div className="empty-results"><div className="empty-results-icon"><Search size={20} /></div><h3>{findings.length ? 'لا نتائج بهذه التصفية' : 'لا توجد مؤشرات نصية'}</h3><p>{findings.length ? 'جرّب تغيير الأهمية أو القسم أو رقم الشريحة أو عبارة البحث.' : 'لم ترصد القواعد المحلية كلمات أو أنماطًا تستحق الإشارة. يمكنك مراجعة نص الشرائح وإضافة ملاحظاتك.'}</p>{findings.length > 0 && <button className="text-button" onClick={onClearFilters}>إزالة التصفية</button>}</div>}
         </> : <div className="slide-list">
-          {active.slides.map(slide => <button className="slide-row" key={slide.number} onClick={() => onOpenSlide(slide.number)} data-testid={`button-open-slide-${slide.number}`}>
-            <span className="slide-number">{String(slide.number).padStart(2, '0')}</span><span className="slide-content"><strong>{slide.title}</strong><small>{slide.text.slice(0, 150) || 'لم يُستخرج نص من هذه الشريحة'}{slide.text.length > 150 ? '…' : ''}</small></span><span className="slide-open-label">فتح النص <ChevronDown size={14} /></span>
-          </button>)}
+          {active.slides.map(slide => <article className="slide-record" key={slide.number}>
+            <button className="slide-row" onClick={() => onOpenSlide(slide.number)} data-testid={`button-open-slide-${slide.number}`}>
+              <span className="slide-number">{String(slide.number).padStart(2, '0')}</span><span className="slide-content"><strong>{slide.title}</strong><small>{slide.text.slice(0, 150) || 'لم يُستخرج نص من هذه الشريحة'}{slide.text.length > 150 ? '…' : ''}</small></span><span className="slide-open-label">فتح النص <ChevronDown size={14} /></span>
+            </button>
+            <SlideImageGallery slide={slide} assets={active.imageAssets} />
+          </article>)}
         </div>}
         <div className="panel-footer"><span><ShieldCheck size={14} /> النصوص محفوظة على هذا الجهاز فقط</span><button onClick={onExportJson} data-testid="button-footer-export">تصدير البيانات <ArrowDownToLine size={14} /></button></div>
       </div>

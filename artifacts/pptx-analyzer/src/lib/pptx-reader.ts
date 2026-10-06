@@ -1,4 +1,8 @@
-import type { ExtractedSlide } from "./types";
+import type {
+  ExtractedSlide,
+  PresentationAsset,
+  PowerPointReadResult,
+} from "./types";
 
 const POWERPOINT_NS =
   "http://schemas.openxmlformats.org/presentationml/2006/main";
@@ -6,10 +10,13 @@ const DRAWING_NS =
   "http://schemas.openxmlformats.org/drawingml/2006/main";
 const RELATIONSHIP_NS =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const SVG_IMAGE_NS =
+  "http://schemas.microsoft.com/office/drawing/2016/SVG/main";
 const PACKAGE_RELATIONSHIP_NS =
   "http://schemas.openxmlformats.org/package/2006/relationships";
 const MAX_FILE_BYTES = 150 * 1024 * 1024;
 const MAX_SLIDE_XML_BYTES = 25 * 1024 * 1024;
+const MAX_TOTAL_IMAGE_BYTES = 150 * 1024 * 1024;
 
 interface ZipEntry {
   name: string;
@@ -39,8 +46,7 @@ function getZipEntries(bytes: Uint8Array): ZipEntry[] {
   const centralDirectoryOffset = view.getUint32(endRecordOffset + 16, true);
   if (
     entryCount === 0xffff ||
-    centralDirectoryOffset === 0xffffffff ||
-    entryCount > 25_000
+    centralDirectoryOffset === 0xffffffff
   ) {
     throw new Error("هذا الملف يستخدم تنسيق ضغط غير مدعوم أو يحتوي على عناصر كثيرة جدًا.");
   }
@@ -81,6 +87,7 @@ function getZipEntries(bytes: Uint8Array): ZipEntry[] {
 async function readZipEntry(
   bytes: Uint8Array,
   entry: ZipEntry,
+  maxUncompressedBytes = MAX_SLIDE_XML_BYTES,
 ): Promise<Uint8Array> {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const localOffset = entry.localHeaderOffset;
@@ -92,8 +99,8 @@ async function readZipEntry(
     throw new Error(`تعذر فتح الملف الداخلي: ${entry.name}`);
   }
 
-  if (entry.uncompressedSize > MAX_SLIDE_XML_BYTES) {
-    throw new Error("تحتوي إحدى الشرائح على بيانات نصية أكبر من الحد المسموح.");
+  if (entry.uncompressedSize > maxUncompressedBytes) {
+    throw new Error(`حجم العنصر الداخلي أكبر من الحد المسموح: ${entry.name}`);
   }
 
   const nameLength = view.getUint16(localOffset + 26, true);
@@ -213,7 +220,216 @@ function extractText(xml: string, slideNumber: number): ExtractedSlide {
   return { number: slideNumber, title, text };
 }
 
-export async function readPowerPoint(file: File): Promise<ExtractedSlide[]> {
+interface PackageRelationship {
+  target: string;
+  type: string;
+  targetMode: string;
+}
+
+function relationshipPathFor(sourcePath: string): string {
+  const separator = sourcePath.lastIndexOf("/");
+  const directory = separator >= 0 ? sourcePath.slice(0, separator) : "";
+  const fileName = separator >= 0 ? sourcePath.slice(separator + 1) : sourcePath;
+  return `${directory}/_rels/${fileName}.rels`;
+}
+
+function resolvePackagePath(sourcePath: string, target: string): string {
+  const isRootRelative = target.startsWith("/") || target.startsWith("ppt/");
+  const parts = isRootRelative
+    ? []
+    : sourcePath.split("/").slice(0, -1);
+  const targetParts = (target.startsWith("/") ? target.slice(1) : target)
+    .replace(/\\/g, "/")
+    .split("/");
+
+  for (const part of targetParts) {
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      parts.pop();
+      continue;
+    }
+    parts.push(part);
+  }
+
+  return parts.join("/");
+}
+
+function parseRelationships(xml: string | undefined): Map<string, PackageRelationship> {
+  const relationships = new Map<string, PackageRelationship>();
+  if (!xml) return relationships;
+
+  const document = parseXml(xml, "روابط الصور");
+  for (const relationship of Array.from(
+    document.getElementsByTagNameNS(PACKAGE_RELATIONSHIP_NS, "Relationship"),
+  )) {
+    const id = relationship.getAttribute("Id");
+    const target = relationship.getAttribute("Target");
+    const type = relationship.getAttribute("Type");
+    if (!id || !target || !type) continue;
+    relationships.set(id, {
+      target,
+      type,
+      targetMode: relationship.getAttribute("TargetMode") || "",
+    });
+  }
+  return relationships;
+}
+
+function parseContentTypes(xml: string | undefined) {
+  const defaults = new Map<string, string>();
+  const overrides = new Map<string, string>();
+  if (!xml) return { defaults, overrides };
+
+  const document = parseXml(xml, "أنواع ملفات العرض");
+  for (const node of Array.from(document.getElementsByTagName("*"))) {
+    if (node.localName === "Default") {
+      const extension = node.getAttribute("Extension")?.toLowerCase();
+      const contentType = node.getAttribute("ContentType");
+      if (extension && contentType) defaults.set(extension, contentType);
+    } else if (node.localName === "Override") {
+      const partName = node.getAttribute("PartName");
+      const contentType = node.getAttribute("ContentType");
+      if (partName && contentType) overrides.set(partName.replace(/^\//, ""), contentType);
+    }
+  }
+  return { defaults, overrides };
+}
+
+function fallbackImageType(path: string): string {
+  const extension = path.split(".").pop()?.toLowerCase();
+  const types: Record<string, string> = {
+    avif: "image/avif",
+    bmp: "image/bmp",
+    gif: "image/gif",
+    jpeg: "image/jpeg",
+    jpg: "image/jpeg",
+    png: "image/png",
+    svg: "image/svg+xml",
+    tif: "image/tiff",
+    tiff: "image/tiff",
+    webp: "image/webp",
+    wmf: "image/x-wmf",
+    emf: "image/x-emf",
+  };
+  return (extension && types[extension]) || "application/octet-stream";
+}
+
+function getImageType(
+  path: string,
+  contentTypes: ReturnType<typeof parseContentTypes>,
+): string {
+  const declaredType = contentTypes.overrides.get(path)
+    || contentTypes.defaults.get(path.split(".").pop()?.toLowerCase() || "");
+  return declaredType && /^image\/[a-z0-9.+-]+$/i.test(declaredType)
+    ? declaredType
+    : fallbackImageType(path);
+}
+
+function toDataUrl(bytes: Uint8Array, contentType: string): string {
+  const chunkSize = 0x7ffe;
+  let base64 = "";
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length));
+    base64 += btoa(String.fromCharCode(...chunk));
+  }
+  return `data:${contentType};base64,${base64}`;
+}
+
+function fileNameFromPath(path: string): string {
+  return path.split(/[\\/]/).pop() || path;
+}
+
+async function extractSlideImageIds(
+  xml: string,
+  slidePath: string,
+  slideNumber: number,
+  relationships: Map<string, PackageRelationship>,
+  contentTypes: ReturnType<typeof parseContentTypes>,
+  byName: Map<string, ZipEntry>,
+  bytes: Uint8Array,
+  imageAssets: Record<string, PresentationAsset>,
+  totalImageBytes: number,
+): Promise<{ imageIds: string[]; totalImageBytes: number }> {
+  const document = parseXml(xml, `صور الشريحة ${slideNumber}`);
+  const blips = Array.from(document.getElementsByTagNameNS(DRAWING_NS, "blip"));
+  const imageIds: string[] = [];
+  let extractedBytes = totalImageBytes;
+
+  for (const blip of blips) {
+    const svgBlip = blip.getElementsByTagNameNS(SVG_IMAGE_NS, "svgBlip")[0];
+    const svgRelationshipId = svgBlip?.getAttributeNS(RELATIONSHIP_NS, "embed")
+      || svgBlip?.getAttribute("r:embed");
+    const regularRelationshipId = blip.getAttributeNS(RELATIONSHIP_NS, "embed")
+      || blip.getAttributeNS(RELATIONSHIP_NS, "link")
+      || blip.getAttribute("r:embed")
+      || blip.getAttribute("r:link");
+    const relationshipId = svgRelationshipId && relationships.has(svgRelationshipId)
+      ? svgRelationshipId
+      : regularRelationshipId;
+    if (!relationshipId) continue;
+
+    const relationship = relationships.get(relationshipId);
+    if (!relationship) {
+      const missingId = `missing:${slidePath}:${relationshipId}`;
+      imageAssets[missingId] ??= {
+        id: missingId,
+        fileName: `صورة الشريحة ${slideNumber}`,
+        contentType: "application/octet-stream",
+        error: "لم يتم العثور على علاقة الصورة داخل ملف العرض.",
+      };
+      imageIds.push(missingId);
+      continue;
+    }
+
+    if (!relationship.type.toLowerCase().endsWith("/image")) continue;
+    const isExternal = relationship.targetMode.toLowerCase() === "external";
+    const target = relationship.target;
+    const assetId = isExternal
+      ? `external:${target}`
+      : resolvePackagePath(slidePath, target);
+
+    if (!imageAssets[assetId]) {
+      const fileName = fileNameFromPath(target);
+      if (isExternal) {
+        imageAssets[assetId] = {
+          id: assetId,
+          fileName,
+          contentType: "image/*",
+          externalUrl: target,
+        };
+      } else {
+        const entry = byName.get(assetId);
+        if (!entry) {
+          imageAssets[assetId] = {
+            id: assetId,
+            fileName,
+            contentType: fallbackImageType(assetId),
+            error: "لم يتم العثور على ملف الصورة المضمّن داخل العرض.",
+          };
+        } else {
+          if (extractedBytes + entry.uncompressedSize > MAX_TOTAL_IMAGE_BYTES) {
+            throw new Error("يتجاوز الحجم الإجمالي للصور المضمّنة 150 ميغابايت؛ لم يتم حفظ تحليل جزئي.");
+          }
+          const contentType = getImageType(assetId, contentTypes);
+          const imageBytes = await readZipEntry(bytes, entry, MAX_TOTAL_IMAGE_BYTES);
+          extractedBytes += imageBytes.byteLength;
+          imageAssets[assetId] = {
+            id: assetId,
+            fileName,
+            contentType,
+            dataUrl: toDataUrl(imageBytes, contentType),
+          };
+        }
+      }
+    }
+
+    imageIds.push(assetId);
+  }
+
+  return { imageIds, totalImageBytes: extractedBytes };
+}
+
+export async function readPowerPoint(file: File): Promise<PowerPointReadResult> {
   if (!file.name.toLowerCase().endsWith(".pptx")) {
     throw new Error("يرجى اختيار ملف PowerPoint بامتداد ‎.pptx.");
   }
@@ -244,12 +460,16 @@ export async function readPowerPoint(file: File): Promise<ExtractedSlide[]> {
     readTextEntry("ppt/presentation.xml"),
     readTextEntry("ppt/_rels/presentation.xml.rels"),
   ]);
+  const contentTypesXml = await readTextEntry("[Content_Types].xml");
+  const contentTypes = parseContentTypes(contentTypesXml);
   const orderedPaths = getOrderedSlidePaths(
     slideNames,
     presentationXml,
     relationshipsXml,
   );
   const slides: ExtractedSlide[] = [];
+  const imageAssets: Record<string, PresentationAsset> = {};
+  let totalImageBytes = 0;
 
   for (let index = 0; index < orderedPaths.length; index += 1) {
     const path = orderedPaths[index];
@@ -258,8 +478,26 @@ export async function readPowerPoint(file: File): Promise<ExtractedSlide[]> {
     const xml = new TextDecoder("utf-8").decode(
       await readZipEntry(bytes, entry),
     );
-    slides.push(extractText(xml, index + 1));
+    const slideNumber = index + 1;
+    const relationshipsXml = await readTextEntry(relationshipPathFor(path));
+    const relationships = parseRelationships(relationshipsXml);
+    const extractedImages = await extractSlideImageIds(
+      xml,
+      path,
+      slideNumber,
+      relationships,
+      contentTypes,
+      byName,
+      bytes,
+      imageAssets,
+      totalImageBytes,
+    );
+    totalImageBytes = extractedImages.totalImageBytes;
+    slides.push({
+      ...extractText(xml, slideNumber),
+      imageIds: extractedImages.imageIds,
+    });
   }
 
-  return slides;
+  return { slides, imageAssets };
 }

@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "y11bkVctWc8EgdYGC7hH8"
+uri = "file://exports/waraq-project-complete.zip"
+type = "unspecified"
+title = "مشروع وَرَق كامل — ZIP"
+description = "نسخة مضغوطة من مساحة العمل كاملة مع ملفات المصدر والإعدادات والأصول وملفات التشغيل. استعيد الاعتمادات باستخدام pnpm install."
+logical_id = "81ff5002-87bd-4e01-9f56-5d43656ee376"
+content_hash = "sha256:3235133958111ed2db5ad9d2262c9979e23f73d4c504f43624b08624449a8707"
+size = 1499779
+mtime_ms = 1791263232488
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:5bfc7e3e-867e-4148-98ca-7b62cb574a49/81ff5002-87bd-4e01-9f56-5d43656ee376/fe4c0b18-798d-410e-b67c-d6c39c450117"
+storage_version_token = "1791263247665952"
+content_type = "application/octet-stream"

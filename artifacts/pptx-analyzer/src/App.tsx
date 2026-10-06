@@ -182,6 +182,10 @@ function App() {
 
         {error && <div className="error-banner" role="alert"><AlertCircle size={18} /><span>{error}</span><button onClick={() => setError('')} aria-label="إغلاق رسالة الخطأ"><X size={16} /></button></div>}
         {notice && <div className="notice-banner" role="status"><Check size={16} />{notice}<button aria-label="إغلاق التنبيه" onClick={() => setNotice('')}><X size={15} /></button></div>}
+        {active && !active.imageAssets && <div className="legacy-image-notice" role="status">
+          <span>هذا التحليل محفوظ قبل دعم صور الشرائح. أعد رفع الملف لإنشاء تحليل جديد يتضمن الصور؛ سيبقى هذا التحليل وملاحظاته كما هي.</span>
+          <button onClick={() => fileInput.current?.click()}>إعادة رفع العرض</button>
+        </div>}
 
         {!active && <EmptyState
           dragging={dragging}

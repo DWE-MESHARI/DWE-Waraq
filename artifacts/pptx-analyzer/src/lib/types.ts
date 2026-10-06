@@ -5,6 +5,16 @@ export interface SlideRecord {
   number: number;
   title: string;
   text: string;
+  imageIds?: string[];
+}
+
+export interface PresentationAsset {
+  id: string;
+  fileName: string;
+  contentType: string;
+  dataUrl?: string;
+  externalUrl?: string;
+  error?: string;
 }
 
 export interface Finding {
@@ -32,6 +42,7 @@ export interface PresentationAnalysis {
   createdAt: string;
   slideCount: number;
   slides: SlideRecord[];
+  imageAssets?: Record<string, PresentationAsset>;
   findings: Finding[];
   notes: UserNote[];
 }
@@ -40,4 +51,10 @@ export interface ExtractedSlide {
   number: number;
   title: string;
   text: string;
+  imageIds?: string[];
+}
+
+export interface PowerPointReadResult {
+  slides: ExtractedSlide[];
+  imageAssets: Record<string, PresentationAsset>;
 }
