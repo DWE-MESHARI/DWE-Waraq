@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>تسجيل الدخول</title>
+<link rel="icon" href="data:,">
+<style>
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{font-family:system-ui,"Segoe UI",Tahoma,sans-serif;background:#f4f1e9;color:#303532;display:grid;place-items:center}
+#gate{width:min(380px,calc(100% - 32px));background:#fff;border:1px solid #e3dccd;border-radius:16px;padding:28px 24px;box-shadow:0 8px 30px rgba(0,0,0,.06)}
+#gate h1{font-size:18px;margin:0 0 18px;font-weight:600}
+#gate label{display:block;font-size:13px;margin:12px 0 6px;color:#6b6b62}
+#gate input{width:100%;height:44px;border:1px solid #d8cdbd;border-radius:10px;padding:0 12px;font:inherit;font-size:15px;direction:ltr;text-align:left;background:#fff}
+#gate input:focus{outline:2px solid #e96826;outline-offset:1px}
+#gate button{margin-top:18px;width:100%;height:46px;border:0;border-radius:10px;background:#e96826;color:#fff;font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+#gate button:disabled{opacity:.6;cursor:default}
+#err{min-height:20px;margin-top:12px;font-size:13px;color:#ad5349}
+#boot{font-size:14px;color:#6b6b62}
+</style>
+</head>
+<body>
+<noscript>يتطلب JavaScript.</noscript>
+<div id="boot" hidden>جارٍ التحميل…</div>
+<form id="gate" hidden autocomplete="on">
+  <h1>تسجيل الدخول</h1>
+  <label for="em">البريد الإلكتروني</label><input id="em" type="email" autocomplete="username" required>
+  <label for="pw">كلمة المرور</label><input id="pw" type="password" autocomplete="current-password" required>
+  <div id="err" role="alert"></div>
+  <button id="go" type="submit">دخول</button>
+</form>
+<script>
+(function () {
+  var URL_ = 'https://jwfylfkwjnznvnvldeiu.supabase.co', KEY = 'sb_publishable_aAIRikU5ZI0ki9j5Ls8Y6g_kZ95pzBL', $ = function (i) { return document.getElementById(i); };
+  var ls = { get: function (k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }, del: function (k) { try { localStorage.removeItem(k); } catch (e) {} } };
+  function show(id) { ['boot', 'gate'].forEach(function (x) { $(x).hidden = x !== id; }); }
+  function sessionOf(j) { return { access_token: j.access_token, refresh_token: j.refresh_token, expires_at: j.expires_at || Math.floor(Date.now() / 1000) + (j.expires_in || 3600), user: { id: j.user && j.user.id, email: j.user && j.user.email } }; }
+  function wipeLocal() {
+    return new Promise(function (res) {
+      Object.keys(localStorage).filter(function (k) { return k.indexOf('waraq-') === 0; }).forEach(function (k) { localStorage.removeItem(k); });
+      try { var r = indexedDB.deleteDatabase('waraq-analysis'); r.onsuccess = r.onerror = r.onblocked = function () { res(); }; } catch (e) { res(); }
+    });
+  }
+  function token() {
+    var s = ls.get('waraq-sb-session'); if (!s) return Promise.resolve(null);
+    if (s.expires_at * 1000 - Date.now() > 60000) return Promise.resolve(s.access_token);
+    return fetch(URL_ + '/auth/v1/token?grant_type=refresh_token', { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: s.refresh_token }) })
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (j) { var n = sessionOf(j); ls.set('waraq-sb-session', n); return n.access_token; })
+      .catch(function () { ls.del('waraq-sb-session'); return null; });
+  }
+  function get(path, t) { return fetch(URL_ + '/storage/v1/object/authenticated/waraq-app/' + path, { headers: { apikey: KEY, Authorization: 'Bearer ' + t }, cache: 'no-store' }).then(function (r) { if (!r.ok) { var e = new Error('x'); e.status = r.status; throw e; } return r.text(); }); }
+  function launch(t) {
+    show('boot');
+    return Promise.all([get('app.css', t), get('app.js', t)]).then(function (a) {
+      var f = document.createElement('link'); f.rel = 'stylesheet'; f.href = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap'; document.head.appendChild(f);
+      var st = document.createElement('style'); st.textContent = a[0]; document.head.appendChild(st);
+      document.title = 'مساحة العمل'; document.body.removeAttribute('style'); document.body.style.display = 'block';
+      ['boot', 'gate'].forEach(function (x) { $(x).remove(); });
+      document.body.insertAdjacentHTML('beforeend', '<div id="app"></div><input id="file-input" type="file" accept=".pptx,.json,application/json,application/vnd.openxmlformats-officedocument.presentationml.presentation" multiple hidden><input id="image-input" type="file" accept="image/*" multiple hidden>');
+      var sc = document.createElement('script'); sc.textContent = a[1]; document.body.appendChild(sc);
+    }).catch(function (e) {
+      if (e && e.status === 401) { ls.del('waraq-sb-session'); show('gate'); return; }
+      show('gate'); $('err').textContent = 'تعذّر التحميل. حاول لاحقًا.';
+    });
+  }
+  $('gate').addEventListener('submit', function (ev) {
+    ev.preventDefault(); $('err').textContent = ''; $('go').disabled = true;
+    fetch(URL_ + '/auth/v1/token?grant_type=password', { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: $('em').value.trim(), password: $('pw').value }) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error('bad'); return j; }); })
+      .then(function (j) { ls.set('waraq-sb-cfg', { url: URL_, key: KEY }); ls.set('waraq-sb-session', sessionOf(j)); $('pw').value = ''; return launch(j.access_token); })
+      .catch(function () { $('err').textContent = 'بيانات الدخول غير صحيحة.'; })
+      .then(function () { var g = $('go'); if (g) g.disabled = false; });
+  });
+  (function start() {
+    show('boot');
+    var wipe = ls.get('waraq-wipe');
+    (wipe ? wipeLocal() : Promise.resolve()).then(function () {
+      ls.set('waraq-sb-cfg', { url: URL_, key: KEY });
+      return token();
+    }).then(function (t) { if (t) return launch(t); show('gate'); }).catch(function () { show('gate'); });
+  })();
+})();
+</script>
+</body>
+</html>
